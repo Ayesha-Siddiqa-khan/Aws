@@ -190,3 +190,4 @@ jobs:
           echo "--- Service ---"
           kubectl get svc -n tictactoe
           echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
+        
