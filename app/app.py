@@ -1,6 +1,5 @@
 from flask import Flask, render_template, jsonify, request, session
 import os
-import uuid
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "tictactoe-secret-key")
@@ -114,16 +113,28 @@ def move():
 
         if winner:
             session["game_over"] = True
-            return jsonify({"board": board, "winner": winner, "winning_combo": winning_combo, "draw": False, "ai_move": ai_index})
+            return jsonify({
+                "board": board, "winner": winner,
+                "winning_combo": winning_combo, "draw": False, "ai_move": ai_index
+            })
 
         if all(cell != "" for cell in board):
             session["game_over"] = True
-            return jsonify({"board": board, "winner": None, "winning_combo": None, "draw": True, "ai_move": ai_index})
+            return jsonify({
+                "board": board, "winner": None,
+                "winning_combo": None, "draw": True, "ai_move": ai_index
+            })
 
         session["current_player"] = "X"
-        return jsonify({"board": board, "winner": None, "winning_combo": None, "draw": False, "ai_move": ai_index, "current_player": "X"})
+        return jsonify({
+            "board": board, "winner": None, "winning_combo": None,
+            "draw": False, "ai_move": ai_index, "current_player": "X"
+        })
 
-    return jsonify({"board": board, "winner": None, "winning_combo": None, "draw": False, "current_player": next_player})
+    return jsonify({
+        "board": board, "winner": None,
+        "winning_combo": None, "draw": False, "current_player": next_player
+    })
 
 
 @app.route("/health")
