@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tic Tac Toe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #1e1e2e;
+      --x-color: #ff4d6d;
+      --o-color: #4cc9f0;
+      --accent: #f72585;
+      --text: #e2e2f0;
+      --muted: #555570;
+      --win-glow: rgba(247, 37, 133, 0.3);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -30%;
+      left: -20%;
+      width: 70vw;
+      height: 70vw;
+      background: radial-gradient(circle, rgba(247,37,133,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -30%;
+      right: -20%;
+      width: 60vw;
+      height: 60vw;
+      background: radial-gradient(circle, rgba(76,201,240,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      z-index: 1;
+      padding: 20px;
+    }
+
+    header { text-align: center; }
+
+    h1 {
+      font-size: clamp(2.2rem, 6vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--x-color), var(--o-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Mode selector */
+    .mode-selector {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      gap: 0;
+    }
+    .mode-btn {
+      padding: 10px 24px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+    .mode-btn:hover:not(.active) { color: var(--text); }
+
+    /* Score */
+    .scoreboard {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 20px;
+      text-align: center;
+      min-width: 80px;
+    }
+    .score-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .score-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+    }
+    .score-card.x-card .score-value { color: var(--x-color); }
+    .score-card.o-card .score-value { color: var(--o-color); }
+    .score-divider { color: var(--muted); font-size: 1.2rem; font-weight: 300; }
+
+    /* Status */
+    .status-bar {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      padding: 8px 20px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+      min-width: 220px;
+      text-align: center;
+    }
+    .status-bar.x-turn { border-color: rgba(255,77,109,0.4); color: var(--x-color); }
+    .status-bar.o-turn { border-color: rgba(76,201,240,0.4); color: var(--o-color); }
+    .status-bar.win   { border-color: var(--accent); color: white; background: rgba(247,37,133,0.15); }
+    .status-bar.draw  { border-color: var(--muted); color: var(--muted); }
+
+    /* Board */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      background: var(--surface);
+      padding: 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 0 60px rgba(0,0,0,0.5);
+    }
+
+    .cell {
+      width: clamp(90px, 20vw, 120px);
+      height: clamp(90px, 20vw, 120px);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      font-size: clamp(2.4rem, 8vw, 3.2rem);
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.1s, border-color 0.2s;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .cell:hover:not(.taken):not(.disabled) {
+      background: #0f0f1a;
+      border-color: #333355;
+      transform: scale(1.03);
+    }
+    .cell.taken { cursor: default; }
+    .cell.disabled { cursor: not-allowed; opacity: 0.85; }
+
+    .cell[data-val="X"] { color: var(--x-color); }
+    .cell[data-val="O"] { color: var(--o-color); }
+
+    .cell.winning {
+      background: rgba(247,37,133,0.1);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 20px rgba(247,37,133,0.15);
+      animation: pulse-win 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse-win {
+      0%, 100% { box-shadow: inset 0 0 20px rgba(247,37,133,0.15); }
+      50%       { box-shadow: inset 0 0 30px rgba(247,37,133,0.3); }
+    }
+
+    .cell-enter {
+      animation: pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes pop-in {
+      from { transform: scale(0.4); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    /* Button */
+    .new-game-btn {
+      padding: 12px 36px;
+      background: linear-gradient(135deg, var(--accent), #7209b7);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 24px rgba(247,37,133,0.3);
+    }
+    .new-game-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(247,37,133,0.45); }
+    .new-game-btn:active { transform: translateY(0); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>TIC TAC TOE</h1>
+    <p class="subtitle">Flask × AWS × Kubernetes</p>
+  </header>
+
+  <div class="mode-selector">
+    <button class="mode-btn active" id="pvp-btn" onclick="setMode('pvp')">2 Players</button>
+    <button class="mode-btn" id="pvc-btn" onclick="setMode('pvc')">vs CPU</button>
+  </div>
+
+  <div class="scoreboard">
+    <div class="score-card x-card">
+      <div class="score-label">X</div>
+      <div class="score-value" id="score-x">0</div>
+    </div>
+    <span class="score-divider">—</span>
+    <div class="score-card o-card">
+      <div class="score-label">O</div>
+      <div class="score-value" id="score-o">0</div>
+    </div>
+  </div>
+
+  <div class="status-bar x-turn" id="status">X's turn</div>
+
+  <div class="board" id="board">
+    {% for i in range(9) %}
+    <div class="cell" data-index="{{ i }}" onclick="handleClick({{ i }})"></div>
+    {% endfor %}
+  </div>
+
+  <button class="new-game-btn" onclick="newGame()">New Game</button>
+</div>
+
+<script>
+  let mode = 'pvp';
+  let scores = { X: 0, O: 0 };
+  let gameOver = false;
+  let currentPlayer = 'X';
+
+  async function setMode(m) {
+    mode = m;
+    document.getElementById('pvp-btn').classList.toggle('active', m === 'pvp');
+    document.getElementById('pvc-btn').classList.toggle('active', m === 'pvc');
+    await newGame();
+  }
+
+  async function newGame() {
+    const res = await fetch('/api/new-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    const data = await res.json();
+    gameOver = false;
+    currentPlayer = 'X';
+    renderBoard(['','','','','','','','',''], []);
+    setStatus("X's turn", 'x-turn');
+  }
+
+  async function handleClick(index) {
+    if (gameOver) return;
+    const cells = document.querySelectorAll('.cell');
+    if (cells[index].classList.contains('taken')) return;
+
+    const res = await fetch('/api/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    renderBoard(data.board, data.winning_combo || []);
+
+    if (data.winner) {
+      gameOver = true;
+      scores[data.winner]++;
+      updateScores();
+      setStatus(`${data.winner} wins! 🎉`, 'win');
+    } else if (data.draw) {
+      gameOver = true;
+      setStatus("It's a draw!", 'draw');
+    } else {
+      currentPlayer = data.current_player || (currentPlayer === 'X' ? 'O' : 'X');
+      setStatus(`${currentPlayer}'s turn`, currentPlayer === 'X' ? 'x-turn' : 'o-turn');
+    }
+  }
+
+  function renderBoard(board, winningCombo) {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach((cell, i) => {
+      const prev = cell.getAttribute('data-val') || '';
+      const val = board[i] || '';
+      cell.setAttribute('data-val', val);
+      cell.textContent = val;
+      cell.className = 'cell';
+      if (val) {
+        cell.classList.add('taken');
+        if (prev !== val) cell.classList.add('cell-enter');
+      }
+      if (winningCombo.includes(i)) cell.classList.add('winning');
+    });
+  }
+
+  function setStatus(text, cls) {
+    const s = document.getElementById('status');
+    s.textContent = text;
+    s.className = 'status-bar ' + cls;
+  }
+
+  function updateScores() {
+    document.getElementById('score-x').textContent = scores.X;
+    document.getElementById('score-o').textContent = scores.O;
+  }
+
+  newGame();
+</script>
+</body>
+</html>

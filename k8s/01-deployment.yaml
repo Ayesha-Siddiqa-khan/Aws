@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tictactoe
+  namespace: tictactoe
+  labels:
+    app: tictactoe
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tictactoe
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # zero-downtime deploy
+  template:
+    metadata:
+      labels:
+        app: tictactoe
+    spec:
+      # ── Security context ────────────────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: tictactoe
+          # IMAGE is replaced by GitHub Actions at deploy time:
+          #   sed -i 's|IMAGE_PLACEHOLDER|<ecr-uri>:<tag>|' k8s/01-deployment.yaml
+          image: IMAGE_PLACEHOLDER
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              name: http
+
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tictactoe-secret
+                  key: secret-key
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+
+          # ── Health probes ──────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # gunicorn writes temp files
+            capabilities:
+              drop: ["ALL"]
+
+      # ── Image pull secret (ECR) ────────────────────────────────────────────
+      # Created automatically by the GitHub Actions workflow via:
+      #   kubectl create secret docker-registry ecr-secret ...
+      imagePullSecrets:
+        - name: ecr-secret
