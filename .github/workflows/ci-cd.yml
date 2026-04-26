@@ -168,17 +168,26 @@ jobs:
             --docker-password="$ECR_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Set image in Deployment
+      - name: Inject image & apply manifests
         run: |
           IMAGE_URI="${{ needs.build-and-push.outputs.image-uri }}"
-          sed -i "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/01-deployment.yaml
+
+          # Verify IMAGE_URI is not empty
+          if [ -z "$IMAGE_URI" ]; then
+            echo "ERROR: IMAGE_URI is empty!"
+            exit 1
+          fi
+
           echo "Deploying image: $IMAGE_URI"
 
-      - name: Apply Kubernetes manifests
-        run: |
-          kubectl apply -f k8s/01-deployment.yaml
+          # Replace placeholder then pipe directly to kubectl
+          sed "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/01-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/02-service.yaml
           kubectl apply -f k8s/03-hpa.yaml
+
+          # Confirm image was set
+          kubectl get deployment tictactoe -n tictactoe \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' && echo
 
       - name: Wait for rollout
         run: |
