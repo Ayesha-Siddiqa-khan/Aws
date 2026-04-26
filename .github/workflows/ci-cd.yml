@@ -198,4 +198,8 @@ jobs:
           kubectl get pods -n tictactoe
           echo "--- Service ---"
           kubectl get svc -n tictactoe
+<<<<<<< HEAD
           echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
+=======
+          echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
+>>>>>>> 49d98eb2661fa511128060250836943ed5fb4803
