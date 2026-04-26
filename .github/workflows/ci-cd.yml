@@ -154,4 +154,3 @@ jobs:
       - name: Show pods and service
         run: |
           kubectl get pods -n tictactoe
-          kubectl get svc -n tictactoe
