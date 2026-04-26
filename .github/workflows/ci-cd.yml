@@ -170,13 +170,10 @@ jobs:
 
       - name: Inject image & apply manifests
         run: |
-          IMAGE_URI="${{ needs.build-and-push.outputs.image-uri }}"
-
-          # Verify IMAGE_URI is not empty
-          if [ -z "$IMAGE_URI" ]; then
-            echo "ERROR: IMAGE_URI is empty!"
-            exit 1
-          fi
+          # Rebuild the image URI from the same parts used in build-and-push
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          IMAGE_URI="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
           echo "Deploying image: $IMAGE_URI"
 
