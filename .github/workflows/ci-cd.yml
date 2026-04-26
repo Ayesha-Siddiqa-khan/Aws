@@ -8,10 +8,10 @@
 #   AWS_REGION              – e.g. us-east-1
 #   ECR_REPOSITORY          – ECR repo short name, e.g. tictactoe
 #   FLASK_SECRET_KEY        – random string for Flask sessions
-#   KUBE_CONFIG             – base64-encoded kubeconfig from your control plane
+#   KUBE_CONFIG             – RAW kubeconfig YAML (NOT base64)
 #                             Run on control plane:
-#                             cat ~/.kube/config | base64 -w 0
-#                             Then paste the output as this secret value.
+#                             cat ~/.kube/config
+#                             Then paste the entire output as this secret.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI/CD — Build, Push & Deploy
@@ -126,10 +126,13 @@ jobs:
         with:
           version: "latest"
 
+      # ── Write kubeconfig directly from raw YAML secret (no base64) ─────────
       - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          printf '%s' "$KUBE_CONFIG" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
       - name: Verify cluster connection
@@ -165,17 +168,23 @@ jobs:
             --docker-password="$ECR_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Set image in Deployment
+      - name: Inject image & apply manifests
         run: |
-          IMAGE_URI="${{ needs.build-and-push.outputs.image-uri }}"
-          sed -i "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/01-deployment.yaml
+          # Rebuild the image URI from the same parts used in build-and-push
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          IMAGE_URI="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
           echo "Deploying image: $IMAGE_URI"
 
-      - name: Apply Kubernetes manifests
-        run: |
-          kubectl apply -f k8s/01-deployment.yaml
+          # Replace placeholder then pipe directly to kubectl
+          sed "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/01-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/02-service.yaml
           kubectl apply -f k8s/03-hpa.yaml
+
+          # Confirm image was set
+          kubectl get deployment tictactoe -n tictactoe \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' && echo
 
       - name: Wait for rollout
         run: |
@@ -190,4 +199,3 @@ jobs:
           echo "--- Service ---"
           kubectl get svc -n tictactoe
           echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
-        

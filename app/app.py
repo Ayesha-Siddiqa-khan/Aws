@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, session
+from flask import Flask, render_template, jsonify, request
 import os
 
 app = Flask(__name__)
@@ -7,9 +7,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "tictactoe-secret-key")
 
 def check_winner(board):
     wins = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],  # rows
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],  # cols
-        [0, 4, 8], [2, 4, 6],              # diagonals
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6],
     ]
     for combo in wins:
         a, b, c = combo
@@ -26,7 +26,6 @@ def minimax(board, is_maximizing):
         return -10
     if all(cell != "" for cell in board):
         return 0
-
     if is_maximizing:
         best = -1000
         for i in range(9):
@@ -66,74 +65,90 @@ def index():
 
 @app.route("/api/new-game", methods=["POST"])
 def new_game():
-    data = request.get_json()
-    mode = data.get("mode", "pvp")  # pvp or pvc
-    session["board"] = [""] * 9
-    session["current_player"] = "X"
-    session["mode"] = mode
-    session["game_over"] = False
-    return jsonify({"board": session["board"], "current_player": "X", "mode": mode})
+    """Return a fresh game state — no server session needed."""
+    return jsonify({
+        "board": [""] * 9,
+        "current_player": "X",
+        "game_over": False,
+        "winner": None,
+        "winning_combo": [],
+        "draw": False
+    })
 
 
 @app.route("/api/move", methods=["POST"])
 def move():
+    """
+    Stateless move endpoint.
+    Client sends full board + current_player + mode.
+    Server validates, applies move, returns new state.
+    """
     data = request.get_json()
+    board = data.get("board", [""] * 9)
+    current_player = data.get("current_player", "X")
+    mode = data.get("mode", "pvp")
     index = data.get("index")
-    board = session.get("board", [""] * 9)
-    current_player = session.get("current_player", "X")
-    mode = session.get("mode", "pvp")
-    game_over = session.get("game_over", False)
 
-    if game_over or board[index] != "" or index is None:
-        return jsonify({"error": "Invalid move"}), 400
+    # Validate
+    if index is None or index < 0 or index > 8:
+        return jsonify({"error": "Invalid index"}), 400
+    if board[index] != "":
+        return jsonify({"error": "Cell already taken"}), 400
 
+    # Apply player move
     board[index] = current_player
     winner, winning_combo = check_winner(board)
 
     if winner:
-        session["board"] = board
-        session["game_over"] = True
-        return jsonify({"board": board, "winner": winner, "winning_combo": winning_combo, "draw": False})
+        return jsonify({
+            "board": board, "winner": winner,
+            "winning_combo": winning_combo,
+            "draw": False, "game_over": True,
+            "current_player": current_player
+        })
 
     if all(cell != "" for cell in board):
-        session["board"] = board
-        session["game_over"] = True
-        return jsonify({"board": board, "winner": None, "winning_combo": None, "draw": True})
+        return jsonify({
+            "board": board, "winner": None,
+            "winning_combo": [], "draw": True,
+            "game_over": True, "current_player": current_player
+        })
 
     next_player = "O" if current_player == "X" else "X"
-    session["current_player"] = next_player
-    session["board"] = board
 
-    # AI move
+    # AI move (vs CPU mode)
     if mode == "pvc" and next_player == "O":
         ai_index = best_move(board)
         board[ai_index] = "O"
         winner, winning_combo = check_winner(board)
-        session["board"] = board
 
         if winner:
-            session["game_over"] = True
             return jsonify({
                 "board": board, "winner": winner,
-                "winning_combo": winning_combo, "draw": False, "ai_move": ai_index
+                "winning_combo": winning_combo,
+                "draw": False, "game_over": True,
+                "ai_move": ai_index, "current_player": "O"
             })
 
         if all(cell != "" for cell in board):
-            session["game_over"] = True
             return jsonify({
                 "board": board, "winner": None,
-                "winning_combo": None, "draw": True, "ai_move": ai_index
+                "winning_combo": [], "draw": True,
+                "game_over": True, "ai_move": ai_index,
+                "current_player": "O"
             })
 
-        session["current_player"] = "X"
         return jsonify({
-            "board": board, "winner": None, "winning_combo": None,
-            "draw": False, "ai_move": ai_index, "current_player": "X"
+            "board": board, "winner": None,
+            "winning_combo": [], "draw": False,
+            "game_over": False, "ai_move": ai_index,
+            "current_player": "X"
         })
 
     return jsonify({
         "board": board, "winner": None,
-        "winning_combo": None, "draw": False, "current_player": next_player
+        "winning_combo": [], "draw": False,
+        "game_over": False, "current_player": next_player
     })
 
 
