@@ -1,19 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# CI/CD Pipeline — Tic Tac Toe
-# Build → Push to ECR → Deploy to self-managed Kubernetes cluster (kubeadm)
-#
-# Required GitHub Secrets:
-#   AWS_ACCESS_KEY_ID       – IAM user key (ECR access only)
-#   AWS_SECRET_ACCESS_KEY   – IAM user secret
-#   AWS_REGION              – e.g. us-east-1
-#   ECR_REPOSITORY          – ECR repo short name, e.g. tictactoe
-#   FLASK_SECRET_KEY        – random string for Flask sessions
-#   KUBE_CONFIG             – RAW kubeconfig YAML (NOT base64)
-#                             Run on control plane:
-#                             cat ~/.kube/config
-#                             Then paste the entire output as this secret.
-# ─────────────────────────────────────────────────────────────────────────────
-
 name: CI/CD — Build, Push & Deploy
 
 on:
@@ -32,7 +16,6 @@ jobs:
   test:
     name: Lint & Test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,8 +38,7 @@ jobs:
 
       - name: Lint with flake8
         working-directory: app
-        run: |
-          flake8 . --max-line-length=120 --exclude=__pycache__
+        run: flake8 . --max-line-length=120 --exclude=__pycache__
 
       - name: Tests placeholder
         run: echo "Add pytest tests under app/tests/ when ready."
@@ -67,10 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push'
-
-    outputs:
-      image-uri: ${{ steps.build.outputs.image-uri }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -86,37 +64,28 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag & push image
+      - name: Build, tag and push image
         id: build
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           LATEST_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
-
           echo "Building $IMAGE_URI"
-          docker build \
-            --tag "$IMAGE_URI" \
-            --tag "$LATEST_URI" \
-            .
-
+          docker build --tag "$IMAGE_URI" --tag "$LATEST_URI" .
           docker push "$IMAGE_URI"
           docker push "$LATEST_URI"
-
           echo "image-uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       - name: Summary
-        run: |
-          echo "### ✅ Image pushed to ECR" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`${{ steps.build.outputs.image-uri }}\`" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Image pushed ${{ steps.build.outputs.image-uri }}" >> "$GITHUB_STEP_SUMMARY"
 
-  # ── 3. Deploy to self-managed Kubernetes cluster ───────────────────────────
+  # ── 3. Deploy to self-managed Kubernetes ───────────────────────────────────
   deploy:
     name: Deploy to Kubernetes
     runs-on: ubuntu-latest
     needs: build-and-push
     environment: production
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,7 +95,6 @@ jobs:
         with:
           version: "latest"
 
-      # ── Write kubeconfig directly from raw YAML secret (no base64) ─────────
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
@@ -160,7 +128,6 @@ jobs:
           ECR_TOKEN=$(aws ecr get-login-password --region "$AWS_REGION")
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
           kubectl create secret docker-registry ecr-secret \
             --namespace tictactoe \
             --docker-server="$ECR_HOST" \
@@ -168,23 +135,15 @@ jobs:
             --docker-password="$ECR_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Inject image & apply manifests
+      - name: Inject image and apply manifests
         run: |
-          # Rebuild the image URI from the same parts used in build-and-push
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           ECR_HOST="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           IMAGE_URI="${ECR_HOST}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-
           echo "Deploying image: $IMAGE_URI"
-
-          # Replace placeholder then pipe directly to kubectl
           sed "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" k8s/01-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/02-service.yaml
           kubectl apply -f k8s/03-hpa.yaml
-
-          # Confirm image was set
-          kubectl get deployment tictactoe -n tictactoe \
-            -o jsonpath='{.spec.template.spec.containers[0].image}' && echo
 
       - name: Wait for rollout
         run: |
@@ -192,14 +151,7 @@ jobs:
             --namespace tictactoe \
             --timeout=180s
 
-      - name: Show running pods and service
+      - name: Show pods and service
         run: |
-          echo "--- Pods ---"
           kubectl get pods -n tictactoe
-          echo "--- Service ---"
           kubectl get svc -n tictactoe
-<<<<<<< HEAD
-          echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
-=======
-          echo "### 🚀 Deploy complete" >> "$GITHUB_STEP_SUMMARY"
->>>>>>> 49d98eb2661fa511128060250836943ed5fb4803
